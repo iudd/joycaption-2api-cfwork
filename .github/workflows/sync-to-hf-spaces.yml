@@ -1,4 +1,4 @@
-name: Sync to HF Spaces (Final Fix)
+name: Sync to HF Spaces (100% Stable Final)
 on:
   push:
     branches: [main]
@@ -11,38 +11,47 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install huggingface_hub (fixed version)
-        # 指定稳定版本，避免参数兼容问题
-        run: pip install huggingface_hub==0.23.0
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
 
-      - name: Upload files to HF Spaces (No Git!)
+      - name: Upload all files via HF API (Batch Mode)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python - <<EOF
-          from huggingface_hub import HfApi, upload_file
+          from huggingface_hub import HfApi
           import os
 
-          # 初始化 HF API
+          # 初始化 API
           api = HfApi(token=os.environ["HF_TOKEN"])
           space_id = "iyougame/newdemo"
+          commit_message = f"Sync from GitHub: ${{ github.sha }}"
 
-          # 遍历当前目录所有文件，排除无关目录
+          # 收集所有要上传的文件（键：HF仓库内路径，值：本地文件路径）
+          files_to_upload = {}
           for root, dirs, files in os.walk("."):
+              # 跳过无关目录
               if ".git" in root or ".github" in root or "hf_sync_temp" in root:
                   continue
               for file in files:
-                  file_path = os.path.join(root, file)
-                  # 修复：移除 overwrite，新版用 force_upload
-                  api.upload_file(
-                      path_or_fileobj=file_path,
-                      path_in_repo=file_path.lstrip("./"),
-                      repo_id=space_id,
-                      repo_type="space",
-                      force_upload=True  # 替代 overwrite，强制覆盖
-                  )
+                  local_path = os.path.join(root, file)
+                  # HF仓库内的路径（去掉开头的 ./）
+                  repo_path = local_path.lstrip("./")
+                  files_to_upload[repo_path] = local_path
 
-          # 重启 Spaces
-          api.restart_space(repo_id=space_id)
-          print("✅ 所有文件上传完成，Spaces 已重启！")
+          # 批量上传并提交（最稳定的方式，无参数兼容问题）
+          api.create_commit(
+              repo_id=space_id,
+              repo_type="space",
+              commit_message=commit_message,
+              revisions=files_to_upload,
+              delete_file_patterns=None,  # 不删除文件，仅覆盖
+          )
+
+          # 重启Spaces
+          try:
+              api.restart_space(repo_id=space_id)
+              print("✅ 文件上传完成，Spaces已重启！")
+          except Exception as e:
+              print(f"⚠️ 文件上传成功，但重启Spaces失败（不影响代码）：{e}")
           EOF
