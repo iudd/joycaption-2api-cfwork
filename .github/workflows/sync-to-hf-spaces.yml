@@ -1,4 +1,4 @@
-name: Sync to HF Spaces (No Git, 100% Working)
+name: Sync to HF Spaces (Final Fix)
 on:
   push:
     branches: [main]
@@ -11,8 +11,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install huggingface_hub
-        run: pip install huggingface_hub
+      - name: Install huggingface_hub (fixed version)
+        # 指定稳定版本，避免参数兼容问题
+        run: pip install huggingface_hub==0.23.0
 
       - name: Upload files to HF Spaces (No Git!)
         env:
@@ -26,20 +27,19 @@ jobs:
           api = HfApi(token=os.environ["HF_TOKEN"])
           space_id = "iyougame/newdemo"
 
-          # 遍历当前目录所有文件，排除.git和.github
+          # 遍历当前目录所有文件，排除无关目录
           for root, dirs, files in os.walk("."):
-              # 跳过无关目录
               if ".git" in root or ".github" in root or "hf_sync_temp" in root:
                   continue
               for file in files:
                   file_path = os.path.join(root, file)
-                  # 上传文件到 HF Spaces
+                  # 修复：移除 overwrite，新版用 force_upload
                   api.upload_file(
                       path_or_fileobj=file_path,
-                      path_in_repo=file_path.lstrip("./"),  # 保持目录结构
+                      path_in_repo=file_path.lstrip("./"),
                       repo_id=space_id,
                       repo_type="space",
-                      overwrite=True  # 强制覆盖
+                      force_upload=True  # 替代 overwrite，强制覆盖
                   )
 
           # 重启 Spaces
