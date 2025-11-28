@@ -1,31 +1,55 @@
-name: Sync to HF Spaces (Official Action)
+name: Sync to HF Spaces (100% Stable)
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 jobs:
-  sync:
+  sync-to-hf:
     runs-on: ubuntu-latest
     steps:
       # 1. 拉取 GitHub 代码
-      - name: Checkout code
+      - name: Checkout GitHub Repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. 官方 HF 同步 Action（一键同步，无需手动 Git 操作）
-      - name: Push to HF Spaces
-        uses: huggingface/hub-action@main
-        with:
-          # 你的 HF Spaces 仓库 ID（用户名/空间名）
-          repo_id: "iyougame/newdemo"
-          # 仓库类型：spaces
-          repo_type: "space"
-          # 推送所有文件（可指定路径，如: path: app.py,requirements.txt）
-          path: "."
-          # HF Token（从 GitHub 密钥读取）
-          token: ${{ secrets.HF_TOKEN }}
-          # 强制推送覆盖
-          commit_message: "Sync from GitHub: ${{ github.sha }}"
-          force: true
+      # 2. 安装必要工具（仅需 requests，用于 API 交互）
+      - name: Install Dependencies
+        run: pip install requests
+
+      # 3. 核心同步脚本（打包文件 + 推送到 HF Spaces）
+      - name: Sync Files to HF Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: iyougame/newdemo
+        run: |
+          # 创建临时目录
+          mkdir -p hf_sync_temp
+          
+          # 复制所有文件到临时目录（排除 git 相关文件）
+          rsync -av --exclude='.git/' --exclude='.github/' ./* hf_sync_temp/
+          
+          # 进入临时目录，初始化 git 仓库（模拟 HF 仓库）
+          cd hf_sync_temp
+          git init
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # 添加 HF Spaces 为远程仓库（用 Token 免密）
+          git remote add origin https://${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_ID}
+          
+          # 拉取远程仓库最新代码（避免冲突）
+          git pull origin main --depth=1 || true
+          
+          # 添加所有文件并提交
+          git add .
+          git commit -m "Sync from GitHub: ${{ github.sha }}" || echo "No changes to commit"
+          
+          # 强制推送到 HF Spaces
+          git push origin main --force
+          
+          # 触发 HF Spaces 重启（确保代码生效）
+          curl -X POST \
+            -H "Authorization: Bearer ${HF_TOKEN}" \
+            https://huggingface.co/api/spaces/${HF_SPACE_ID}/restart
