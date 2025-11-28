@@ -1,4 +1,5 @@
 name: Sync to HF Spaces (100% Stable Final)
+
 on:
   push:
     branches: [main]
@@ -19,39 +20,57 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python - <<EOF
-          from huggingface_hub import HfApi
+          from huggingface_hub import HfApi, CommitOperationAdd
           import os
 
-          # 初始化 API
+          # 1. 初始化 API
           api = HfApi(token=os.environ["HF_TOKEN"])
           space_id = "iyougame/newdemo"
           commit_message = f"Sync from GitHub: ${{ github.sha }}"
 
-          # 收集所有要上传的文件（键：HF仓库内路径，值：本地文件路径）
-          files_to_upload = {}
+          # 2. 收集所有要上传的操作对象
+          operations = []
+          
+          print(f"正在扫描文件...")
           for root, dirs, files in os.walk("."):
-              # 跳过无关目录
+              # 跳过无关目录 (.git, .github 等)
               if ".git" in root or ".github" in root or "hf_sync_temp" in root:
                   continue
+              
               for file in files:
                   local_path = os.path.join(root, file)
-                  # HF仓库内的路径（去掉开头的 ./）
-                  repo_path = local_path.lstrip("./")
-                  files_to_upload[repo_path] = local_path
+                  # 获取相对路径作为仓库内的路径
+                  repo_path = os.path.relpath(local_path, ".")
+                  
+                  # 创建 CommitOperationAdd 对象并加入列表
+                  # 这是新版 API 要求的格式，替代了旧版的 revisions 字典
+                  operations.append(
+                      CommitOperationAdd(path_in_repo=repo_path, path_or_fileobj=local_path)
+                  )
+          
+          print(f"扫描完成，准备上传 {len(operations)} 个文件...")
 
-          # 批量上传并提交（最稳定的方式，无参数兼容问题）
-          api.create_commit(
-              repo_id=space_id,
-              repo_type="space",
-              commit_message=commit_message,
-              revisions=files_to_upload,
-              delete_file_patterns=None,  # 不删除文件，仅覆盖
-          )
+          # 3. 批量上传并提交
+          if operations:
+              try:
+                  api.create_commit(
+                      repo_id=space_id,
+                      repo_type="space",
+                      commit_message=commit_message,
+                      operations=operations, # 这里使用 operations 参数
+                      delete_file_patterns=None,
+                  )
+                  print("✅ 文件上传成功！")
+              except Exception as e:
+                  print(f"❌ 上传失败: {e}")
+                  exit(1)
+          else:
+              print("⚠️ 没有发现需要上传的文件。")
 
-          # 重启Spaces
+          # 4. 重启 Spaces
           try:
               api.restart_space(repo_id=space_id)
-              print("✅ 文件上传完成，Spaces已重启！")
+              print("✅ Spaces 重启指令已发送！")
           except Exception as e:
-              print(f"⚠️ 文件上传成功，但重启Spaces失败（不影响代码）：{e}")
+              print(f"⚠️ 文件已同步，但重启 Spaces 失败（通常不影响运行）: {e}")
           EOF
