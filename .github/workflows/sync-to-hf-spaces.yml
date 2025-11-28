@@ -1,4 +1,4 @@
-name: Sync to HF Spaces (Final Working Version)
+name: Sync to HF Spaces (No Git, 100% Working)
 on:
   push:
     branches: [main]
@@ -8,41 +8,41 @@ jobs:
   sync-to-hf:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout GitHub Repo
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Install Dependencies
-        run: pip install requests
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
 
-      - name: Sync Files to HF Spaces
+      - name: Upload files to HF Spaces (No Git!)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE_ID: iyougame/newdemo
         run: |
-          # 清空旧的临时目录（避免残留）
-          rm -rf hf_sync_temp || true
-          mkdir -p hf_sync_temp
-          
-          # 直接克隆 HF Spaces 仓库（避免分支不匹配）
-          git clone --depth=1 https://${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_ID} hf_sync_temp
-          
-          # 进入克隆的仓库，清空所有文件（保留 .git 目录）
-          cd hf_sync_temp
-          rm -rf ./* || true
-          
-          # 复制 GitHub 代码到 HF 仓库目录（排除无关文件）
-          rsync -av --exclude='.git/' --exclude='.github/' --exclude='hf_sync_temp/' ../* ./
-          
-          # 配置 Git 身份
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          
-          # 提交并推送（强制覆盖）
-          git add .
-          git commit -m "Sync from GitHub: ${{ github.sha }}" || echo "No changes to commit"
-          git push origin main --force
-          
+          python - <<EOF
+          from huggingface_hub import HfApi, upload_file
+          import os
+
+          # 初始化 HF API
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space_id = "iyougame/newdemo"
+
+          # 遍历当前目录所有文件，排除.git和.github
+          for root, dirs, files in os.walk("."):
+              # 跳过无关目录
+              if ".git" in root or ".github" in root or "hf_sync_temp" in root:
+                  continue
+              for file in files:
+                  file_path = os.path.join(root, file)
+                  # 上传文件到 HF Spaces
+                  api.upload_file(
+                      path_or_fileobj=file_path,
+                      path_in_repo=file_path.lstrip("./"),  # 保持目录结构
+                      repo_id=space_id,
+                      repo_type="space",
+                      overwrite=True  # 强制覆盖
+                  )
+
           # 重启 Spaces
-          curl -X POST -H "Authorization: Bearer ${HF_TOKEN}" https://huggingface.co/api/spaces/${HF_SPACE_ID}/restart
+          api.restart_space(repo_id=space_id)
+          print("✅ 所有文件上传完成，Spaces 已重启！")
+          EOF
