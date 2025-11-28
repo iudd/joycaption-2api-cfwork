@@ -1,0 +1,37 @@
+name: Sync to Hugging Face Spaces
+on:
+  # 触发条件：推送到 main 分支（可修改为你的分支名，如 master）
+  push:
+    branches: [ main ]
+  # 可选：手动触发工作流（在 GitHub Actions 页面点击 "Run workflow"）
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      # 步骤1：拉取 GitHub 仓库的代码到运行环境
+      - name: Checkout GitHub repo
+        uses: actions/checkout@v4
+        with:
+          # 拉取所有历史（避免子模块/大文件问题，可选）
+          fetch-depth: 0
+
+      # 步骤2：配置 Git 身份（HF 仓库提交需要）
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      # 步骤3：添加 HF Spaces 仓库作为远程仓库
+      - name: Add HF Spaces remote
+        run: |
+          # 替换为你的 HF Spaces 仓库地址（注意格式：https://hf_token@huggingface.co/...）https://huggingface.co/spaces/iyougame/newdemo
+          HF_SPACES_REPO="https://${{ secrets.HF_TOKEN }}@huggingface.co/spaces/iyougame/newdemo"
+          git remote add hf-spaces $HF_SPACES_REPO
+
+      # 步骤4：推送到 HF Spaces 仓库（强制推送覆盖，避免冲突）
+      - name: Push to HF Spaces
+        run: |
+          # 推送当前分支（main）到 HF Spaces 的 main 分支（HF Spaces 默认分支为 main）
+          git push hf-spaces main --force
