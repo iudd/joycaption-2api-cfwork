@@ -33,7 +33,7 @@ jobs:
           
           print(f"正在扫描文件...")
           for root, dirs, files in os.walk("."):
-              # 跳过无关目录 (.git, .github 等)
+              # 跳过无关目录
               if ".git" in root or ".github" in root or "hf_sync_temp" in root:
                   continue
               
@@ -43,7 +43,6 @@ jobs:
                   repo_path = os.path.relpath(local_path, ".")
                   
                   # 创建 CommitOperationAdd 对象并加入列表
-                  # 这是新版 API 要求的格式，替代了旧版的 revisions 字典
                   operations.append(
                       CommitOperationAdd(path_in_repo=repo_path, path_or_fileobj=local_path)
                   )
@@ -53,12 +52,12 @@ jobs:
           # 3. 批量上传并提交
           if operations:
               try:
+                  # 修复点：删除了不支持的 delete_file_patterns 参数
                   api.create_commit(
                       repo_id=space_id,
                       repo_type="space",
                       commit_message=commit_message,
-                      operations=operations, # 这里使用 operations 参数
-                      delete_file_patterns=None,
+                      operations=operations,
                   )
                   print("✅ 文件上传成功！")
               except Exception as e:
