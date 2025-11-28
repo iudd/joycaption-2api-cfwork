@@ -20,10 +20,11 @@ jobs:
 
       - name: Add HF Spaces remote
         run: |
-          # 已替换为你的 HF Spaces 地址，并拼接 Token
+          # 严格格式：变量赋值+双引号包裹URL
           HF_SPACES_REPO="https://${{ secrets.HF_TOKEN }}@huggingface.co/spaces/iyougame/newdemo"
-          git remote add hf-spaces $HF_SPACES_REPO
+          git remote add hf-spaces "${HF_SPACES_REPO}"
 
       - name: Push to HF Spaces
         run: |
+          # 强制推送（确保覆盖 HF 仓库）
           git push hf-spaces main --force
