@@ -18,13 +18,9 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
+      # 修复核心：URL 单行书写，无换行、无末尾/
       - name: Add HF Spaces remote
-        run: |
-          # 严格格式：变量赋值+双引号包裹URL
-          HF_SPACES_REPO="https://${{ secrets.HF_TOKEN }}@huggingface.co/spaces/iyougame/newdemo"
-          git remote add hf-spaces "${HF_SPACES_REPO}"
+        run: git remote add hf-spaces https://${{ secrets.HF_TOKEN }}@huggingface.co/spaces/iyougame/newdemo
 
       - name: Push to HF Spaces
-        run: |
-          # 强制推送（确保覆盖 HF 仓库）
-          git push hf-spaces main --force
+        run: git push hf-spaces main --force
